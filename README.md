@@ -98,7 +98,7 @@ See [tokenizer.py](whisper/tokenizer.py) for the list of all available languages
 Transcription can also be performed within Python: 
 
 ```python
-import whisper
+import batch_whisper
 
 model = whisper.load_model("base")
 result = model.transcribe("audio.mp3")
@@ -118,7 +118,7 @@ In the case where audio clips are different lengths, whisper will dynamically re
 Below is an example usage of `whisper.detect_language()` and `whisper.decode()` which provide lower-level access to the model.
 
 ```python
-import whisper
+import batch_whisper
 
 model = whisper.load_model("base")
 
