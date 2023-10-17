@@ -4,8 +4,8 @@ import pkg_resources
 from setuptools import setup, find_packages
 
 setup(
-    name="whisper",
-    py_modules=["whisper"],
+    name="batch_whisper",
+    py_modules=["batch_whisper"],
     version="1.0",
     description="Robust Speech Recognition via Large-Scale Weak Supervision",
     readme="README.md",
@@ -21,7 +21,7 @@ setup(
         )
     ],
     entry_points = {
-        'console_scripts': ['whisper=whisper.transcribe:cli'],
+        'console_scripts': ['batch_whisper=whisper.transcribe:cli'],
     },
     include_package_data=True,
     extras_require={'dev': ['pytest']},
