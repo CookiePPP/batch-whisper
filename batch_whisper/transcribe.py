@@ -14,7 +14,7 @@ from .tokenizer import LANGUAGES, TO_LANGUAGE_CODE, get_tokenizer
 from .utils import exact_div, format_timestamp, optional_int, optional_float, str2bool, write_txt, write_vtt, write_srt
 
 if TYPE_CHECKING:
-    from .model import Whisper
+    from .model import batch_whisper
 
 
 def transcribe(
@@ -321,6 +321,7 @@ def batch_transcribe(
     the spoken language ("language"), which is detected when `decode_options["language"]` is None.
     """
     batch_size = len(audio)
+    assert batch_size > 0, "recieved no audio files"
     dtype = torch.float16 if decode_options.get("fp16", True) else torch.float32
     if model.device == torch.device("cpu"):
         if torch.cuda.is_available():
@@ -352,7 +353,7 @@ def batch_transcribe(
         elif type(lang) == list:
             assert all(isinstance(l, str) for l in lang), "If a list of languages is specified in DecodeOptions, all languages must be strings." 
             assert len(lang) == len(audio), "If a list of languages is specified in DecodeOptions, the list length must match the number of audio files specified."
-            languages = lang 
+            languages = lang
         else:
             raise NotImplementedError("Only string and list arguments are supported for the language DecodeOption.")
 
@@ -410,11 +411,21 @@ def batch_transcribe(
     initial_prompt = decode_options.pop("initial_prompt", None) or []
     initial_prompts = []
     if initial_prompt:
-        assert len(initial_prompt) == batch_size, "Number of initial prompts must match batch size."
-        for i in range(batch_size):
-            initial_prompts.append(tokenizers[languages[i]].encode(" " + initial_prompt[i].strip()))
-            all_tokens.extend(initial_prompt)
-
+        if type(initial_prompt) == str:
+            initial_prompt = [initial_prompt]
+        if len(initial_prompt) == batch_size:
+            for i in range(batch_size):
+                initial_prompt_tokenized_i = tokenizers[languages[i]].encode(" " + initial_prompt[i].strip())
+                initial_prompts.append(initial_prompt_tokenized_i)
+                all_tokens[i].extend(initial_prompt_tokenized_i)
+        elif len(initial_prompt) == 1:
+            initial_prompt_tokenized = tokenizers[languages[0]].encode(" " + initial_prompt[0].strip())
+            for i in range(batch_size):
+                initial_prompts.append(initial_prompt_tokenized)
+                all_tokens[i].extend(initial_prompt_tokenized)
+        else:
+            raise ValueError(f"initial_prompt must be a list of length 1 or {batch_size}.")
+    
     def add_segment(
         *, seeker: int, segments: list, start: float, end: float, text_tokens: torch.Tensor, result: DecodingResult, tokenizer
     ):
@@ -468,7 +479,7 @@ def batch_transcribe(
 
             decode_options["prompt"] = [all_tokens[imap[i]][prompt_reset_since[imap[i]]:] for i in range(len(batch_segments))]
             decode_options["language"] = [l for i,l in enumerate(languages) if continue_processing[i]]
-            results: List[DecodingResult] = decode_with_fallback(torch.stack(batch_segments)) 
+            results: List[DecodingResult] = decode_with_fallback(torch.stack(batch_segments))
             batch_tokens = [torch.tensor(result.tokens) for result in results]
 
             no_speech_results = [False]*len(results)
@@ -546,7 +557,7 @@ def batch_transcribe(
             pbar.update(min(num_frames[midx], seekers[midx]) - previous_seek_values[midx])
             previous_seek_values = copy.deepcopy(seekers)
 
-    return [dict(text=tokenizers[languages[i]].decode([token for token in all_tokens[i][len(initial_prompt):] if token < tokenizers[languages[i]].eot]), segments=all_segments[i], language=languages[i]) for i in range(len(all_segments))]
+    return [dict(text=tokenizers[languages[i]].decode([token for token in all_tokens[i][len(initial_prompts[i]):] if token < tokenizers[languages[i]].eot]), segments=all_segments[i], language=languages[i]) for i in range(len(all_segments))]
 
 
 def cli():
